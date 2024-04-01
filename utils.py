@@ -163,9 +163,6 @@ class VerticalSeamImage(SeamImage):
 
         return cost_matrix
 
-    def calculate_pixel_energy(self, i, j):
-        return np.sqrt((self.gs[i + 1, j] - self.gs[i, j]) ** 2 + (self.gs[i, j + 1] - self.gs[i, j]) ** 2)
-
     # @NI_decor
     def seams_removal(self, num_remove: int):
         """ Iterates num_remove times and removes num_remove vertical seams
