@@ -72,7 +72,9 @@ class SeamImage:
             Use NumpyPy vectorized matrix multiplication for high performance.
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
-        raise NotImplementedError("TODO: Implement SeamImage.rgb_to_grayscale")
+        grayscale_img = np_img @ self.gs_weights
+        padded_grayscale_img = np.pad(grayscale_img, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=0.5)
+        return padded_grayscale_img
 
     # @NI_decor
     def calc_gradient_magnitude(self):
@@ -86,8 +88,12 @@ class SeamImage:
             - keep in mind that values must be in range [0,1]
             - np.gradient or other off-the-shelf tools are NOT allowed, however feel free to compare yourself to them
         """
-        raise NotImplementedError("TODO: Implement SeamImage.calc_gradient_magnitude")
-        
+        gradient_matrix = np.zeros(self.gs.shape)
+        for i in range(1, self.gs.shape[0] - 1):
+            for j in range(1, self.gs.shape[1] - 1):
+                gradient_matrix[i, j] = np.sqrt((self.gs[i + 1, j] - self.gs[i, j]) ** 2 + (self.gs[i, j + 1] - self.gs[i, j]) ** 2)
+        return gradient_matrix
+
     def calc_M(self):
         pass
              
