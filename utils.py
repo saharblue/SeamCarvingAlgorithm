@@ -92,7 +92,7 @@ class SeamImage:
         for i in range(1, self.gs.shape[0] - 1):
             for j in range(1, self.gs.shape[1] - 1):
                 gradient_matrix[i, j] = np.sqrt((self.gs[i + 1, j] - self.gs[i, j]) ** 2 + (self.gs[i, j + 1] - self.gs[i, j]) ** 2)
-        return gradient_matrix
+        return gradient_matrix.squeeze()
 
     def calc_M(self):
         pass
@@ -153,7 +153,18 @@ class VerticalSeamImage(SeamImage):
             As taught, the energy is calculated from top to bottom.
             You might find the function 'np.roll' useful.
         """
-        raise NotImplementedError("TODO: Implement SeamImage.calc_M")
+        height = self.gs.shape[0]
+        width = self.gs.shape[1]
+        cost_matrix = self.E.copy()
+
+        for i in range(2, height - 1):
+            for j in range(1, width - 1):
+                cost_matrix[i, j] += np.min([cost_matrix[i - 1, j - 1], cost_matrix[i - 1, j], cost_matrix[i - 1, j + 1]])
+
+        return cost_matrix
+
+    def calculate_pixel_energy(self, i, j):
+        return np.sqrt((self.gs[i + 1, j] - self.gs[i, j]) ** 2 + (self.gs[i, j + 1] - self.gs[i, j]) ** 2)
 
     # @NI_decor
     def seams_removal(self, num_remove: int):
