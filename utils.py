@@ -52,6 +52,10 @@ class SeamImage:
             self.E = self.calc_gradient_magnitude()
         except NotImplementedError as e:
             print(e)
+
+        self.backtrack_mat = np.zeros_like(self.E)
+        self.M = np.zeros_like(self.E)
+        self.mask = np.zeros_like(self.M)
         #################
 
         # additional attributes you might find useful
@@ -73,8 +77,14 @@ class SeamImage:
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
         grayscale_img = np_img @ self.gs_weights
-        padded_grayscale_img = np.pad(grayscale_img, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=0.5)
+        padded_grayscale_img = self.pad_matrix(grayscale_img)
         return padded_grayscale_img
+
+    def pad_matrix(self, matrix):
+        return np.pad(matrix, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=0.5)
+
+    def remove_pad_from_matrix(self, padded_matrix):
+        return padded_matrix[1:-1, 1:-1, :]
 
     # @NI_decor
     def calc_gradient_magnitude(self):
@@ -95,8 +105,39 @@ class SeamImage:
         return gradient_matrix.squeeze()
 
     def calc_M(self):
-        pass
-             
+        """ Calculates the matrix M discussed in lecture (with forward-looking cost)
+
+        Returns:
+            An energy matrix M (float32) of shape (h, w)
+
+        Guidelines & hints:
+            As taught, the energy is calculated from top to bottom.
+            You might find the function 'np.roll' useful.
+        """
+        height = self.gs.shape[0]
+        width = self.gs.shape[1]
+        cost_matrix = self.E.copy()
+
+        for i in range(2, height - 1):
+            for j in range(1, width - 1):
+                left = cost_matrix[i - 1, j - 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(
+                    self.gs[i - 1, j] - self.gs[i, j - 1])
+                center = cost_matrix[i - 1, j] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1])
+                right = cost_matrix[i - 1, j + 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(
+                    self.gs[i, j + 1] - self.gs[i - 1, j])
+
+                cost_matrix[i, j] += np.min([left, center, right])
+                min_index = np.argmin([left, center, right], axis=0)[0]
+                self.backtrack_mat[i, j] = min_index - 1
+        return cost_matrix
+
+    def remove_pad_from_matrices(self):
+        self.M = self.remove_pad_from_matrix(self.M)
+        self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
+        self.E = self.remove_pad_from_matrix(self.E)
+        self.gs = self.remove_pad_from_matrix(self.gs)
+        self.mask = self.remove_pad_from_matrix(self.mask)
+
     def seams_removal(self, num_remove):
         pass
 
@@ -110,7 +151,12 @@ class SeamImage:
         pass
 
     def init_mats(self):
-        pass
+        self.E = self.calc_gradient_magnitude()
+        self.backtrack_mat = np.zeros_like(self.E, dtype=int).squeeze()
+        self.M = self.calc_M()
+        self.mask = np.ones_like(self.M, dtype=bool)
+
+        self.remove_pad_from_matrices()
 
     def update_ref_mat(self):
         for i, s in enumerate(self.seam_history[-1]):
@@ -141,32 +187,6 @@ class VerticalSeamImage(SeamImage):
             self.init_mats()
         except NotImplementedError as e:
             print(e)
-    
-    # @NI_decor
-    def calc_M(self):
-        """ Calculates the matrix M discussed in lecture (with forward-looking cost)
-
-        Returns:
-            An energy matrix M (float32) of shape (h, w)
-
-        Guidelines & hints:
-            As taught, the energy is calculated from top to bottom.
-            You might find the function 'np.roll' useful.
-        """
-        height = self.gs.shape[0]
-        width = self.gs.shape[1]
-        cost_matrix = self.E.copy()
-
-        for i in range(2, height - 1):
-            for j in range(1, width - 1):
-                left = cost_matrix[i - 1, j - 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(self.gs[i - 1, j] - self.gs[i, j - 1])
-                center = cost_matrix[i - 1, j] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1])
-                right = cost_matrix[i - 1, j + 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(self.gs[i, j + 1] - self.gs[i - 1, j])
-
-                cost_matrix[i, j] += np.min([left, center, right])
-                min_index = np.argmin([left, center, right], axis=0)[0]
-                self.backtrack_mat[i, j] = min_index - 1
-        return cost_matrix
 
     # @NI_decor
     def seams_removal(self, num_remove: int):
@@ -242,6 +262,8 @@ class VerticalSeamImage(SeamImage):
         self.backtrack_mat = np.zeros_like(self.E, dtype=int).squeeze()
         self.M = self.calc_M()
         self.mask = np.ones_like(self.M, dtype=bool)
+
+        self.remove_pad_from_matrices()
 
     # @NI_decor
     def seams_removal_horizontal(self, num_remove):
