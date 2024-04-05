@@ -271,7 +271,7 @@ class VerticalSeamImage(SeamImage):
             last_min_col = min_col
             for row in range(height - 2, 0, -1):
                 index_in_backtrack_matrix = self.backtrack_mat[row + 1, last_min_col]
-                last_min_col = last_min_col + index_in_backtrack_matrix
+                last_min_col = int(last_min_col + index_in_backtrack_matrix)
                 seam.append(last_min_col)
 
             seam.append(last_min_col + self.backtrack_mat[1, last_min_col])

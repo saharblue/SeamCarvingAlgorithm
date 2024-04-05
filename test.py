@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def test_seam_removal():
+def seam_removal():
     np.random.seed(0)  # For reproducibility
     M = np.random.rand(10, 10) # Random values between 0 and 1
     # Example 10x10 backtracking matrix
@@ -27,11 +27,11 @@ def test_seam_removal():
             last_min_col = min_col
             for row in range(height - 2, 0, -1):
                 index_in_backtrack_matrix = backtrack_mat[row + 1, last_min_col]
-                last_min_col = min_col + index_in_backtrack_matrix
+                last_min_col = int(last_min_col + index_in_backtrack_matrix)
                 seam.append(last_min_col)
 
             seam.append(last_min_col + backtrack_mat[1, last_min_col])
             seam.reverse()
             print(seam)  
 
-test_seam_removal()
+seam_removal()
