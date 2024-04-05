@@ -259,13 +259,18 @@ class VerticalSeamImage(SeamImage):
             - visualize the original image with removed seams marked (for comparison)
         """
 
-        last_row_min_index = np.argmin(self.M[self.h - 1])
-        current_seam = np.zeros(self.h, dtype=list)
-        current_seam[self.h - 1] = [self.h - 1, last_row_min_index]
 
-        for i in range(self.h - 2, 0, -1):
-            current_seam[i] = self.backtrack_mat[i, last_row_min_index]
-            last_row_min_index += self.backtrack_mat[i, last_row_min_index]
+
+        for i in range(num_remove):
+            seam = []
+            self.init_mats()
+            height, width = self.M.shape
+            print(self.M)
+            for row in range(height - 1, 0, -1):
+                min_cell_in_row = np.argmin(self.M[row])
+                print(min_cell_in_row)
+        pass
+            
 
     def find_seam(self):
         # Initialize the seam vector with the same height as the image
