@@ -205,8 +205,9 @@ class SeamImage:
         self.mask = np.ones_like(self.M, dtype=bool)
 
     def update_ref_mat(self):
-        for i, s in enumerate(self.seam_history[-1]):
-            self.idx_map[i, s:] += 1
+        for i, col in enumerate(self.seam_history[-1]):
+            # Update the reference matrix for the removed seam
+            self.idx_map_h[i, col:] = np.roll(self.idx_map_h[i, col:], -1)
 
     def backtrack_seam(self):
         pass
@@ -276,7 +277,16 @@ class VerticalSeamImage(SeamImage):
 
             seam.append(last_min_col + self.backtrack_mat[1, last_min_col])
             seam.reverse()
-            print(seam)            
+            self.seam_history.append(seam)
+            for row_seam, col_seam in enumerate(seam):
+                row_index = self.idx_map_h[row_seam, col_seam]
+                col_index = self.idx_map_v[row_seam, col_seam]
+                self.cumm_mask[row_index, col_index] = False
+
+            self.update_ref_mat()
+            print(seam)
+            print(self.idx_map_v)
+            print(self.idx_map_h)
 
     def find_seam(self):
         # Initialize the seam vector with the same height as the image
@@ -337,7 +347,7 @@ class VerticalSeamImage(SeamImage):
         Parameters:
             num_remove (int): umber of vertical seam to be removed
         """
-        raise NotImplementedError("TODO: Implement SeamImage.seams_removal_vertical")
+        self.seams_removal(num_remove)
 
     # @NI_decor
     def backtrack_seam(self):
