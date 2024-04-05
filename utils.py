@@ -130,15 +130,24 @@ class SeamImage:
             - keep in mind that values must be in range [0,1]
             - np.gradient or other off-the-shelf tools are NOT allowed, however feel free to compare yourself to them
         """
-        self.gs = self.pad_matrix(self.gs)
-        gradient_matrix = np.zeros_like(self.gs)
 
-        for i in range(1, self.gs.shape[0] - 1):
-            for j in range(1, self.gs.shape[1] - 1):
-                gradient_matrix[i, j] = np.sqrt((self.gs[i + 1, j] - self.gs[i, j]) ** 2 + (self.gs[i, j + 1] - self.gs[i, j]) ** 2)
+        gradient_matrix = np.zeros_like(self.resized_gs)
 
-        self.gs = self.remove_pad_from_matrix(self.gs)
-        gradient_matrix = self.remove_pad_from_matrix(gradient_matrix)
+        for i in range(1, self.resized_gs.shape[0] - 2):
+            for j in range(1, self.resized_gs.shape[1] - 2):
+                gradient_matrix[i, j] = np.sqrt((self.resized_gs[i + 1, j] - self.resized_gs[i, j]) ** 2 + (self.resized_gs[i, j + 1] - self.resized_gs[i, j]) ** 2)
+
+        # Iterate over all rows but only in the last column
+        for i in range(self.h):
+            if i < self.h - 1:
+                gradient_matrix[i, -1] = np.sqrt((self.resized_gs[i + 1, -1] - self.resized_gs[i, -1]) ** 2 + (self.resized_gs[i, -2] - self.resized_gs[i, -1]) ** 2)
+            else:
+                gradient_matrix[i, -1] = np.sqrt((self.resized_gs[i, -2] - self.resized_gs[i, -1]) ** 2 + (self.resized_gs[i - 1 , -1] - self.resized_gs[i, -1]) ** 2)
+
+        for j in range(self.w - 1):
+            if j < self.w - 1:
+                gradient_matrix[-1, j] = np.sqrt((self.resized_gs[-1, j + 1] - self.resized_gs[-1, j]) ** 2 + (self.resized_gs[-2, j] - self.resized_gs[-1, j]) ** 2)
+
         return gradient_matrix.squeeze()
 
     def calc_M(self):
@@ -151,30 +160,30 @@ class SeamImage:
             As taught, the energy is calculated from top to bottom.
             You might find the function 'np.roll' useful.
         """
-        self.gs = self.pad_matrix(self.gs)
-        self.E = self.pad_matrix(self.E, np.inf)
-        self.backtrack_mat = self.pad_matrix(self.backtrack_mat)
+        # self.resized_gs = self.pad_matrix(self.resized_gs)
+        # self.E = self.pad_matrix(self.E, np.inf)
+        # self.backtrack_mat = self.pad_matrix(self.backtrack_mat)
 
-        height = self.gs.shape[0]
-        width = self.gs.shape[1]
+        self.resized_gs = self.pad_matrix(self.resized_gs, np.inf)
+
         cost_matrix = self.E.copy()
 
-        for i in range(2, height - 1):
-            for j in range(1, width - 1):
-                left = cost_matrix[i - 1, j - 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(
-                    self.gs[i - 1, j] - self.gs[i, j - 1])
-                center = cost_matrix[i - 1, j] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1])
-                right = cost_matrix[i - 1, j + 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(
-                    self.gs[i, j + 1] - self.gs[i - 1, j])
+        for i in range(2, self.h - 1):
+            for j in range(1, self.w - 1):
+                left = cost_matrix[i - 1, j - 1] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1]) + np.abs(
+                    self.resized_gs[i - 1, j] - self.resized_gs[i, j - 1])
+                center = cost_matrix[i - 1, j] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1])
+                right = cost_matrix[i - 1, j + 1] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1]) + np.abs(
+                    self.resized_gs[i, j + 1] - self.resized_gs[i - 1, j])
 
                 cost_matrix[i, j] += np.min([left, center, right])
                 min_index = np.argmin([left, center, right], axis=0)
                 self.backtrack_mat[i, j] = min_index - 1
 
-        self.gs = self.remove_pad_from_matrix(self.gs)
-        self.E = self.remove_pad_from_matrix(self.E)
-        self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
-        cost_matrix = self.remove_pad_from_matrix(cost_matrix)
+        self.resized_gs = self.remove_pad_from_matrix(self.resized_gs)
+        # self.E = self.remove_pad_from_matrix(self.E)
+        # self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
+        # cost_matrix = self.remove_pad_from_matrix(cost_matrix)
 
         return cost_matrix
 
@@ -182,9 +191,9 @@ class SeamImage:
         self.M = self.remove_pad_from_matrix(self.M)
         self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
         self.E = self.remove_pad_from_matrix(self.E)
-        self.gs = self.remove_pad_from_matrix(self.gs)
+        self.resized_gs = self.remove_pad_from_matrix(self.resized_gs)
         self.mask = self.remove_pad_from_matrix(self.mask)
-        self.rgb = self.remove_pad_from_matrix(self.rgb)
+        self.resized_rgb = self.remove_pad_from_matrix(self.resized_rgb)
 
     def seams_removal(self, num_remove):
         pass
@@ -264,7 +273,7 @@ class VerticalSeamImage(SeamImage):
             - visualize the original image with removed seams marked (for comparison)
         """
 
-        for i in range(1):
+        for i in range(num_remove):
             seam = []
             self.init_mats()
             height, width = self.M.shape
@@ -285,23 +294,33 @@ class VerticalSeamImage(SeamImage):
                 col_index = self.idx_map_h[row_seam, col_seam]
                 row_index = self.idx_map_v[row_seam, col_seam]
                 self.cumm_mask[row_index, col_index] = False
-                self.seams_rgb[row_index, col_index] = [1,0,0]
 
             self.update_ref_mat()
             print(seam)
-            #self.remove_seam()
+            self.remove_seam()
 
     def remove_seam(self):
-        seam = self.seam_history[-1]
-        height, width = self.gs.shape
-        new_image = np.zeros((height, width), dtype=self.gs.dtype)
+        seam = self.seam_history[-1]  # Retrieve the last seam to be removed
+        height, width, = self.resized_gs.shape
+        new_width = width - 1  # New width after seam removal
+
+        # Initialize new images with the updated width
+        new_image_gs = np.zeros((height, new_width), dtype=self.resized_gs.dtype)
+        new_image_rgb = np.zeros((height, new_width, 3), dtype=self.resized_rgb.dtype)  # Ensure 3 channels
 
         for i in range(height):
-            j = seam[i]
-            # Use np.concatenate to join the pixels before and after the seam for grayscale image
-            new_image[i, :] = np.concatenate((self.gs[i, :j], self.gs[i, j + 1:]), axis=0)
+            j = seam[i]  # The column index of the seam for the current row
+            # For the grayscale image, remove the seam pixel
+            new_image_gs[i, :] = np.concatenate((self.resized_gs[i, :j], self.resized_gs[i, j + 1:]), axis=0)
+            # For the RGB image, remove the seam pixel from each color channel
+            new_image_rgb[i, :, :] = np.concatenate((self.resized_rgb[i, :j, :], self.resized_rgb[i, j + 1:, :]),
+                                                    axis=0)
 
-        self.gs = new_image
+        # Update the images after seam removal
+        self.resized_gs = new_image_gs
+        self.resized_rgb = new_image_rgb
+
+        self.h, self.w = self.resized_gs.shape
 
     def paint_seams(self):
         for s in self.seam_history:
@@ -335,6 +354,7 @@ class VerticalSeamImage(SeamImage):
             num_remove (int): umber of vertical seam to be removed
         """
         self.seams_removal(num_remove)
+        self.paint_seams()
 
     # @NI_decor
     def backtrack_seam(self):
