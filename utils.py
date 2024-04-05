@@ -174,6 +174,7 @@ class SeamImage:
         self.gs = self.remove_pad_from_matrix(self.gs)
         self.E = self.remove_pad_from_matrix(self.E)
         self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
+        cost_matrix = self.remove_pad_from_matrix(cost_matrix)
 
         return cost_matrix
 
