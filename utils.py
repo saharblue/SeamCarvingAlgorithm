@@ -79,45 +79,6 @@ class SeamImage:
         grayscale_img = np_img @ self.gs_weights
         return grayscale_img.squeeze()
 
-    def pad_matrix(self, matrix, pad_value=0.5):
-        """
-        Adds padding around the given matrix.
-        - For a 2D matrix, padding is added on all sides.
-        - For a 3D matrix, padding is added on the first two dimensions.
-
-        Parameters:
-            matrix (np.ndarray): Input 2D or 3D matrix.
-            pad_value (float): Value to use for padding.
-
-        Returns:
-            np.ndarray: Padded matrix.
-        """
-        if matrix.ndim == 2:  # For 2D matrices
-            return np.pad(matrix, ((1, 1), (1, 1)), 'constant', constant_values=pad_value)
-        elif matrix.ndim == 3:  # For 3D matrices
-            return np.pad(matrix, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=pad_value)
-        else:
-            raise ValueError("Matrix must be either 2D or 3D.")
-
-    def remove_pad_from_matrix(self, padded_matrix):
-        """
-        Removes padding from the given matrix.
-        - For a 2D matrix, padding is removed from all sides.
-        - For a 3D matrix, padding is removed from the first two dimensions.
-
-        Parameters:
-            padded_matrix (np.ndarray): Input padded 2D or 3D matrix.
-
-        Returns:
-            np.ndarray: Matrix after removing padding.
-        """
-        if padded_matrix.ndim == 2:  # For 2D matrices
-            return padded_matrix[1:-1, 1:-1]
-        elif padded_matrix.ndim == 3:  # For 3D matrices
-            return padded_matrix[1:-1, 1:-1, :]
-        else:
-            raise ValueError("Matrix must be either 2D or 3D.")
-
     # @NI_decor
     def calc_gradient_magnitude(self):
         """ Calculate gradient magnitude of a grayscale image
@@ -130,29 +91,33 @@ class SeamImage:
             - keep in mind that values must be in range [0,1]
             - np.gradient or other off-the-shelf tools are NOT allowed, however feel free to compare yourself to them
         """
-
+        # Initialize the gradient matrix with zeros
         gradient_matrix = np.zeros_like(self.resized_gs)
 
-        for i in range(1, self.resized_gs.shape[0] - 2):
-            for j in range(1, self.resized_gs.shape[1] - 2):
-                gradient_matrix[i, j] = np.sqrt((self.resized_gs[i + 1, j] - self.resized_gs[i, j]) ** 2 + (self.resized_gs[i, j + 1] - self.resized_gs[i, j]) ** 2)
+        # Compute the gradients for the interior of the image
+        dx = self.resized_gs[1:-1, 1:-1] - self.resized_gs[1:-1, :-2]
+        dy = self.resized_gs[1:-1, 1:-1] - self.resized_gs[:-2, 1:-1]
+        gradient_matrix[1:-1, 1:-1] = np.sqrt(dx**2 + dy**2)
 
-        # Iterate over all rows but only in the last column
-        for i in range(self.h):
-            if i < self.h - 1:
-                gradient_matrix[i, -1] = np.sqrt((self.resized_gs[i + 1, -1] - self.resized_gs[i, -1]) ** 2 + (self.resized_gs[i, -2] - self.resized_gs[i, -1]) ** 2)
-            else:
-                gradient_matrix[i, -1] = np.sqrt((self.resized_gs[i, -2] - self.resized_gs[i, -1]) ** 2 + (self.resized_gs[i - 1 , -1] - self.resized_gs[i, -1]) ** 2)
+        # Handle the last column, excluding the last row
+        dx_last_col = self.resized_gs[:-1, -1] - self.resized_gs[:-1, -2]
+        dy_last_col = np.diff(self.resized_gs[:-1, -1])
+        gradient_matrix[:-1, -1] = np.sqrt(dx_last_col**2 + np.pad(dy_last_col, (0, 1), 'edge')**2)
 
-        for j in range(self.w - 1):
-            if j < self.w - 1:
-                gradient_matrix[-1, j] = np.sqrt((self.resized_gs[-1, j + 1] - self.resized_gs[-1, j]) ** 2 + (self.resized_gs[-2, j] - self.resized_gs[-1, j]) ** 2)
+        # Handle the last row, excluding the last column
+        dx_last_row = np.diff(self.resized_gs[-1, :-1])
+        dy_last_row = self.resized_gs[-1, :-1] - self.resized_gs[-2, :-1]
+        gradient_matrix[-1, :-1] = np.sqrt(np.pad(dx_last_row, (0, 1), 'edge')**2 + dy_last_row**2)
+
+        # Handle the bottom-right corner
+        gradient_matrix[-1, -1] = np.sqrt((self.resized_gs[-1, -2] - self.resized_gs[-1, -1])**2 +
+                                          (self.resized_gs[-2, -1] - self.resized_gs[-1, -1])**2)
 
         return gradient_matrix.squeeze()
 
     def calc_M(self):
-        """ Calculates the matrix M discussed in lecture (with forward-looking cost)
-
+        """Calculates the matrix M discussed in lecture (with forward-looking cost)
+        and fills the backtracking matrix with the direction of the minimum cost path.
         Returns:
             An energy matrix M (float32) of shape (h, w)
 
@@ -160,40 +125,44 @@ class SeamImage:
             As taught, the energy is calculated from top to bottom.
             You might find the function 'np.roll' useful.
         """
-        # self.resized_gs = self.pad_matrix(self.resized_gs)
-        # self.E = self.pad_matrix(self.E, np.inf)
-        # self.backtrack_mat = self.pad_matrix(self.backtrack_mat)
+        # Initialize M with zeros and backtrack with -5
+        M = np.zeros_like(self.E)
+        self.backtrack_mat = np.full_like(self.E, -5, dtype=np.int32)
 
-        self.resized_gs = self.pad_matrix(self.resized_gs, np.inf)
+        # The first row of M is the same as the first row of the energy matrix E
+        M[0, :] = self.E[0, :]
 
-        cost_matrix = self.E.copy()
+        # Precompute the shifted versions of the energy matrix E
+        resized_gs_2d = self.resized_gs
+        gs_shifted_right = np.roll(resized_gs_2d, 1, axis=1)
+        gs_shifted_left = np.roll(resized_gs_2d, -1, axis=1)
+        gs_shifted_down = np.roll(resized_gs_2d, 1, axis=0)
 
-        for i in range(2, self.h - 1):
-            for j in range(1, self.w - 1):
-                left = cost_matrix[i - 1, j - 1] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1]) + np.abs(
-                    self.resized_gs[i - 1, j] - self.resized_gs[i, j - 1])
-                center = cost_matrix[i - 1, j] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1])
-                right = cost_matrix[i - 1, j + 1] + np.abs(self.resized_gs[i, j + 1] - self.resized_gs[i, j - 1]) + np.abs(
-                    self.resized_gs[i, j + 1] - self.resized_gs[i - 1, j])
+        # Compute the forward energy costs for the entire image
+        c_left = np.abs(gs_shifted_right - gs_shifted_left) + np.abs(gs_shifted_down - gs_shifted_right)
+        c_right = np.abs(gs_shifted_right - gs_shifted_left) + np.abs(gs_shifted_down - gs_shifted_left)
+        c_up = np.abs(gs_shifted_right - gs_shifted_left)
 
-                cost_matrix[i, j] += np.min([left, center, right])
-                min_index = np.argmin([left, center, right], axis=0)
-                self.backtrack_mat[i, j] = min_index - 1
+        # Set the infinite costs for the first and last columns
+        c_left[:, 0] = np.inf
+        c_right[:, -1] = np.inf
 
-        self.resized_gs = self.remove_pad_from_matrix(self.resized_gs)
-        # self.E = self.remove_pad_from_matrix(self.E)
-        # self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
-        # cost_matrix = self.remove_pad_from_matrix(cost_matrix)
+        # Iterate over each row, starting from the second row
+        for i in range(1, self.h):
+            # Calculate the total costs for each direction
+            cost_up = M[i - 1, :] + c_up[i, :]
+            cost_left = np.roll(M[i - 1, :], 1) + c_left[i, :]
+            cost_right = np.roll(M[i - 1, :], -1) + c_right[i, :]
 
-        return cost_matrix
+            # Find the minimum forward energy path from the previous row
+            total_costs = np.vstack((cost_left, cost_up, cost_right))
+            min_costs_indices = np.argmin(total_costs, axis=0)
+            M[i, :] = self.E[i, :] + np.choose(min_costs_indices, total_costs)
 
-    def remove_pad_from_matrices(self):
-        self.M = self.remove_pad_from_matrix(self.M)
-        self.backtrack_mat = self.remove_pad_from_matrix(self.backtrack_mat)
-        self.E = self.remove_pad_from_matrix(self.E)
-        self.resized_gs = self.remove_pad_from_matrix(self.resized_gs)
-        self.mask = self.remove_pad_from_matrix(self.mask)
-        self.resized_rgb = self.remove_pad_from_matrix(self.resized_rgb)
+            # Update the backtracking matrix with the direction of the minimum energy path
+            self.backtrack_mat[i, :] = min_costs_indices - 1  # -1 for left, 0 for up, 1 for right
+
+        return M
 
     def seams_removal(self, num_remove):
         pass
