@@ -138,7 +138,7 @@ class VerticalSeamImage(SeamImage):
         """
         super().__init__(*args, **kwargs)
         try:
-            self.M = self.calc_M()
+            self.init_mats()
         except NotImplementedError as e:
             print(e)
     
@@ -159,8 +159,13 @@ class VerticalSeamImage(SeamImage):
 
         for i in range(2, height - 1):
             for j in range(1, width - 1):
-                cost_matrix[i, j] += np.min([cost_matrix[i - 1, j - 1], cost_matrix[i - 1, j], cost_matrix[i - 1, j + 1]])
+                left = cost_matrix[i - 1, j - 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(self.gs[i - 1, j] - self.gs[i, j - 1])
+                center = cost_matrix[i - 1, j] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1])
+                right = cost_matrix[i - 1, j + 1] + np.abs(self.gs[i, j + 1] - self.gs[i, j - 1]) + np.abs(self.gs[i, j + 1] - self.gs[i - 1, j])
 
+                cost_matrix[i, j] += np.min([left, center, right])
+                min_index = np.argmin([left, center, right], axis=0)[0]
+                self.backtrack_mat[i, j] = min_index - 1
         return cost_matrix
 
     # @NI_decor
@@ -188,7 +193,42 @@ class VerticalSeamImage(SeamImage):
             - removing seams couple of times (call the function more than once)
             - visualize the original image with removed seams marked (for comparison)
         """
-        raise NotImplementedError("TODO: Implement SeamImage.seams_removal")
+
+        last_row_min_index = np.argmin(self.M[self.h - 1])
+        current_seam = np.zeros(self.h, dtype=list)
+        current_seam[self.h - 1] = [self.h - 1, last_row_min_index]
+
+        for i in range(self.h - 2, 0, -1):
+            current_seam[i] = self.backtrack_mat[i, last_row_min_index]
+            last_row_min_index += self.backtrack_mat[i, last_row_min_index]
+
+    def find_seam(self):
+        # Initialize the seam vector with the same height as the image
+        seam = np.zeros((self.h,), dtype=np.int32)
+
+        # Start from the bottom row and find the index of the minimum element in M
+        j = np.argmin(self.M[-1])
+        seam[-1] = j
+
+        # Trace the seam upward using the backtrack matrix
+        for i in range(self.h - 2, 0, -1):  # Start from the second last row to the first row
+            j += self.backtrack_mat[i + 1, j]  # Update j based on the backtrack direction (-1, 0, 1)
+            seam[i] = j
+
+        return seam
+
+    def remove_seam(self):
+        seam = self.find_seam()
+        height, width = self.gs.shape[:2]
+        new_image = np.zeros((height, width), dtype=self.image.dtype)
+
+        for i in range(self.h):
+            j = seam[i]
+            # Use np.concatenate to join the pixels before and after the seam for grayscale image
+            new_image[i, :] = np.concatenate((self.image[i, :j], self.image[i, j + 1:]), axis=0)
+
+        self.image = new_image
+        self.w -= 1  # Update the width of the image
 
     def paint_seams(self):
         for s in self.seam_history:
@@ -199,8 +239,8 @@ class VerticalSeamImage(SeamImage):
 
     def init_mats(self):
         self.E = self.calc_gradient_magnitude()
+        self.backtrack_mat = np.zeros_like(self.E, dtype=int).squeeze()
         self.M = self.calc_M()
-        self.backtrack_mat = np.zeros_like(self.M, dtype=int)
         self.mask = np.ones_like(self.M, dtype=bool)
 
     # @NI_decor
