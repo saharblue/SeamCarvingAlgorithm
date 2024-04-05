@@ -77,13 +77,46 @@ class SeamImage:
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
         grayscale_img = np_img @ self.gs_weights
-        return grayscale_img
+        return grayscale_img.squeeze()
 
-    def pad_matrix(self, matrix):
-        return np.pad(matrix, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=0.5)
+    def pad_matrix(self, matrix, pad_value=0.5):
+        """
+        Adds padding around the given matrix.
+        - For a 2D matrix, padding is added on all sides.
+        - For a 3D matrix, padding is added on the first two dimensions.
+
+        Parameters:
+            matrix (np.ndarray): Input 2D or 3D matrix.
+            pad_value (float): Value to use for padding.
+
+        Returns:
+            np.ndarray: Padded matrix.
+        """
+        if matrix.ndim == 2:  # For 2D matrices
+            return np.pad(matrix, ((1, 1), (1, 1)), 'constant', constant_values=pad_value)
+        elif matrix.ndim == 3:  # For 3D matrices
+            return np.pad(matrix, ((1, 1), (1, 1), (0, 0)), 'constant', constant_values=pad_value)
+        else:
+            raise ValueError("Matrix must be either 2D or 3D.")
 
     def remove_pad_from_matrix(self, padded_matrix):
-        return padded_matrix[1:-1, 1:-1, :]
+        """
+        Removes padding from the given matrix.
+        - For a 2D matrix, padding is removed from all sides.
+        - For a 3D matrix, padding is removed from the first two dimensions.
+
+        Parameters:
+            padded_matrix (np.ndarray): Input padded 2D or 3D matrix.
+
+        Returns:
+            np.ndarray: Matrix after removing padding.
+        """
+        if padded_matrix.ndim == 2:  # For 2D matrices
+            return padded_matrix[1:-1, 1:-1]
+        elif padded_matrix.ndim == 3:  # For 3D matrices
+            return padded_matrix[1:-1, 1:-1, :]
+        else:
+            raise ValueError("Matrix must be either 2D or 3D.")
 
     # @NI_decor
     def calc_gradient_magnitude(self):
@@ -98,7 +131,7 @@ class SeamImage:
             - np.gradient or other off-the-shelf tools are NOT allowed, however feel free to compare yourself to them
         """
         self.gs = self.pad_matrix(self.gs)
-        gradient_matrix = np.zeros(self.gs.shape)
+        gradient_matrix = np.zeros_like(self.gs)
 
         for i in range(1, self.gs.shape[0] - 1):
             for j in range(1, self.gs.shape[1] - 1):
@@ -135,7 +168,7 @@ class SeamImage:
                     self.gs[i, j + 1] - self.gs[i - 1, j])
 
                 cost_matrix[i, j] += np.min([left, center, right])
-                min_index = np.argmin([left, center, right], axis=0)[0]
+                min_index = np.argmin([left, center, right], axis=0)
                 self.backtrack_mat[i, j] = min_index - 1
 
         self.gs = self.remove_pad_from_matrix(self.gs)
