@@ -137,6 +137,7 @@ class SeamImage:
         self.E = self.remove_pad_from_matrix(self.E)
         self.gs = self.remove_pad_from_matrix(self.gs)
         self.mask = self.remove_pad_from_matrix(self.mask)
+        self.rgb = self.remove_pad_from_matrix(self.rgb)
 
     def seams_removal(self, num_remove):
         pass
