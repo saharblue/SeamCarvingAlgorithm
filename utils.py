@@ -152,7 +152,7 @@ class SeamImage:
             You might find the function 'np.roll' useful.
         """
         self.gs = self.pad_matrix(self.gs)
-        self.E = self.pad_matrix(self.E)
+        self.E = self.pad_matrix(self.E, np.inf)
         self.backtrack_mat = self.pad_matrix(self.backtrack_mat)
 
         height = self.gs.shape[0]
@@ -205,6 +205,9 @@ class SeamImage:
         self.mask = np.ones_like(self.M, dtype=bool)
 
     def update_ref_mat(self):
+        """
+        update the index map after removing a seam
+        """
         for i, col in enumerate(self.seam_history[-1]):
             # Update the reference matrix for the removed seam
             self.idx_map_h[i, col:] = np.roll(self.idx_map_h[i, col:], -1)
@@ -279,42 +282,26 @@ class VerticalSeamImage(SeamImage):
             seam.reverse()
             self.seam_history.append(seam)
             for row_seam, col_seam in enumerate(seam):
-                row_index = self.idx_map_h[row_seam, col_seam]
-                col_index = self.idx_map_v[row_seam, col_seam]
+                col_index = self.idx_map_h[row_seam, col_seam]
+                row_index = self.idx_map_v[row_seam, col_seam]
                 self.cumm_mask[row_index, col_index] = False
+                self.seams_rgb[row_index, col_index] = [1,0,0]
 
             self.update_ref_mat()
             print(seam)
-            print(self.idx_map_v)
-            print(self.idx_map_h)
-
-    def find_seam(self):
-        # Initialize the seam vector with the same height as the image
-        seam = np.zeros((self.h,), dtype=np.int32)
-
-        # Start from the bottom row and find the index of the minimum element in M
-        j = np.argmin(self.M[-1])
-        seam[-1] = j
-
-        # Trace the seam upward using the backtrack matrix
-        for i in range(self.h - 2, 0, -1):  # Start from the second last row to the first row
-            j += self.backtrack_mat[i + 1, j]  # Update j based on the backtrack direction (-1, 0, 1)
-            seam[i] = j
-
-        return seam
+            #self.remove_seam()
 
     def remove_seam(self):
-        seam = self.find_seam()
-        height, width = self.gs.shape[:2]
-        new_image = np.zeros((height, width), dtype=self.image.dtype)
+        seam = self.seam_history[-1]
+        height, width = self.gs.shape
+        new_image = np.zeros((height, width), dtype=self.gs.dtype)
 
-        for i in range(self.h):
+        for i in range(height):
             j = seam[i]
             # Use np.concatenate to join the pixels before and after the seam for grayscale image
-            new_image[i, :] = np.concatenate((self.image[i, :j], self.image[i, j + 1:]), axis=0)
+            new_image[i, :] = np.concatenate((self.gs[i, :j], self.gs[i, j + 1:]), axis=0)
 
-        self.image = new_image
-        self.w -= 1  # Update the width of the image
+        self.gs = new_image
 
     def paint_seams(self):
         for s in self.seam_history:
@@ -354,15 +341,6 @@ class VerticalSeamImage(SeamImage):
         """ Backtracks a seam for Seam Carving as taught in lecture
         """
         raise NotImplementedError("TODO: Implement SeamImage.backtrack_seam_b")
-
-    # @NI_decor
-    def remove_seam(self):
-        """ Removes a seam from self.rgb (you may create a resized version, like self.resized_rgb)
-
-        Guidelines & hints:
-        In order to apply the removal, you might want to extend the seam mask to support 3 channels (rgb) using: 3d_mak = np.stack([1d_mask] * 3, axis=2), and then use it to create a resized version.
-        """
-        raise NotImplementedError("TODO: Implement SeamImage.remove_seam")
 
     # @NI_decor
     def seams_addition(self, num_add: int):
