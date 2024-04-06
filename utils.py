@@ -211,9 +211,6 @@ class SeamImage:
                 self.idx_map_v[row, i:] = np.roll(self.idx_map_v[row, i:], -1)
                 # Since we're removing horizontal seams, no need to update self.idx_map_h here
 
-    def backtrack_seam(self):
-        pass
-
     def remove_seam(self):
         pass
 
@@ -264,21 +261,8 @@ class VerticalSeamImage(SeamImage):
         """
 
         for i in range(num_remove):
-            seam = []
             self.init_mats()
-            height, width = self.M.shape
-
-            min_col = np.argmin(self.M[-1])
-            seam.append(min_col)
-
-            last_min_col = min_col
-            for row in range(height - 2, 0, -1):
-                index_in_backtrack_matrix = self.backtrack_mat[row + 1, last_min_col]
-                last_min_col = int(last_min_col + index_in_backtrack_matrix)
-                seam.append(last_min_col)
-
-            seam.append(last_min_col + self.backtrack_mat[1, last_min_col])
-            seam.reverse()
+            seam = self.backtrack_seam()
             self.seam_history.append(seam)
             for row_seam, col_seam in enumerate(seam):
                 col_index = self.idx_map_h[row_seam, col_seam]
@@ -354,7 +338,19 @@ class VerticalSeamImage(SeamImage):
     def backtrack_seam(self):
         """ Backtracks a seam for Seam Carving as taught in lecture
         """
-        raise NotImplementedError("TODO: Implement SeamImage.backtrack_seam_b")
+        seam = []
+        min_col = np.argmin(self.M[-1])
+        seam.append(min_col)
+
+        last_min_col = min_col
+        for row in range(self.h - 2, 0, -1):
+            index_in_backtrack_matrix = self.backtrack_mat[row + 1, last_min_col]
+            last_min_col = int(last_min_col + index_in_backtrack_matrix)
+            seam.append(last_min_col)
+
+        seam.append(last_min_col + self.backtrack_mat[1, last_min_col])
+        seam.reverse()
+        return seam
 
     # @NI_decor
     def seams_addition(self, num_add: int):
