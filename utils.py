@@ -411,9 +411,9 @@ class SCWithObjRemoval(VerticalSeamImage):
         import glob
         """ VerticalSeamImage initialization.
         """
-        super().__init__(*args, **kwargs)
-        self.active_masks = active_masks
         self.obj_masks = {basename(img_path)[:-4]: self.load_image(img_path, format='L') for img_path in glob.glob('images/obj_masks/*')}
+        self.active_masks = active_masks
+        super().__init__(*args, **kwargs)
 
         try:
             self.preprocess_masks()
@@ -439,10 +439,6 @@ class SCWithObjRemoval(VerticalSeamImage):
             binary_mask = np.where(mask > 0, 1, 0)
             self.obj_masks[mask_name] = binary_mask
 
-
-        print(len(self.obj_masks))
-        print(self.obj_masks)
-
     # @NI_decor
     def apply_mask(self):
         """ Applies all active masks on the image
@@ -451,19 +447,19 @@ class SCWithObjRemoval(VerticalSeamImage):
                 - you need to apply the masks on other matrices!
                 - think how to force seams to pass through a mask's object..
         """
-        print(self.obj_masks.keys())
         for mask_name in self.active_masks:
+            print(self.obj_masks[mask_name].shape)
+
             mask = self.obj_masks[mask_name]
-            self.E = np.where(mask == 1, -np.inf, self.E)
+            self.E = np.where(mask == 1, 0, self.E + 1000)
+
+    def init_mats(self):
+        self.E = self.calc_gradient_magnitude()
+        self.apply_mask()
+        self.backtrack_mat = np.zeros_like(self.M, dtype=int)
         self.M = self.calc_M()
+        self.mask = np.ones_like(self.M, dtype=bool)
 
-
-    # def init_mats(self):
-    #     self.E = self.calc_gradient_magnitude()
-    #     self.M = self.calc_M()
-    #     self.apply_mask() # -> added
-    #     self.backtrack_mat = np.zeros_like(self.M, dtype=int)
-    #     self.mask = np.ones_like(self.M, dtype=bool)
 
     def reinit(self, active_masks):
         """ re-initiates instance
@@ -471,11 +467,23 @@ class SCWithObjRemoval(VerticalSeamImage):
         self.__init__(active_masks=active_masks, img_path=self.path)
 
     def remove_seam(self):
-        """ A wrapper for super.remove_seam method. takes care of the masks.
-        """
-        super().remove_seam()
-        # for k in self.active_masks:
-        #     self.obj_masks[k] = self.obj_masks[k][self.mask].reshape(self.h, self.w)
+        """A wrapper for super().remove_seam method that also takes care of the masks."""
+        super().remove_seam()  # Call the parent class's remove_seam method
+        seam = self.seam_history[-1]  # Retrieve the last seam to be removed
+
+        for mask_name in self.active_masks:
+            print(self.obj_masks[mask_name].shape)
+
+            mask = self.obj_masks[mask_name]
+            new_mask = np.zeros((self.h, self.w), dtype=mask.dtype)  # Initialize a new mask with the updated width
+
+            for i in range(self.h):
+                j = seam[i]  # The column index of the seam for the current row
+                # Keep all the pixels before the seam pixel, and all the pixels after the seam pixel in the current row
+                new_mask[i, :] = np.concatenate((mask[i, :j], mask[i, j + 1:]), axis=0)
+
+            self.obj_masks[mask_name] = new_mask  # Update the mask in the dictionary
+            print(self.obj_masks[mask_name].shape)
 
 
 def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
