@@ -295,9 +295,6 @@ class VerticalSeamImage(SeamImage):
         self.h, self.w = self.resized_gs.shape
 
     def paint_seams(self):
-        for s in self.seam_history:
-            for i, s_i in enumerate(s):
-                self.cumm_mask[self.idx_map_v[i,s_i], self.idx_map_h[i,s_i]] = False
         cumm_mask_rgb = np.stack([self.cumm_mask] * 3, axis=2)
         self.seams_rgb = np.where(cumm_mask_rgb, self.seams_rgb, [1,0,0])
 
