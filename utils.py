@@ -56,6 +56,7 @@ class SeamImage:
         self.backtrack_mat = np.zeros_like(self.E)
         self.M = np.zeros_like(self.E)
         self.mask = np.zeros_like(self.M)
+        self.is_horizontal = False
         #################
 
         # additional attributes you might find useful
@@ -91,29 +92,11 @@ class SeamImage:
             - keep in mind that values must be in range [0,1]
             - np.gradient or other off-the-shelf tools are NOT allowed, however feel free to compare yourself to them
         """
-        # Initialize the gradient matrix with zeros
-        gradient_matrix = np.zeros_like(self.resized_gs)
+        gs_gradient_x = np.subtract(self.resized_gs, np.roll(self.resized_gs, -1, axis=1))
+        gs_gradient_y = np.subtract(self.resized_gs, np.roll(self.resized_gs, -1, axis=0))
+        gradient_magnitude = np.sqrt(np.add(np.square(gs_gradient_x), np.square(gs_gradient_y)))
 
-        # Compute the gradients for the interior of the image
-        dx = self.resized_gs[1:-1, 1:-1] - self.resized_gs[1:-1, :-2]
-        dy = self.resized_gs[1:-1, 1:-1] - self.resized_gs[:-2, 1:-1]
-        gradient_matrix[1:-1, 1:-1] = np.sqrt(dx**2 + dy**2)
-
-        # Handle the last column, excluding the last row
-        dx_last_col = self.resized_gs[:-1, -1] - self.resized_gs[:-1, -2]
-        dy_last_col = np.diff(self.resized_gs[:-1, -1])
-        gradient_matrix[:-1, -1] = np.sqrt(dx_last_col**2 + np.pad(dy_last_col, (0, 1), 'edge')**2)
-
-        # Handle the last row, excluding the last column
-        dx_last_row = np.diff(self.resized_gs[-1, :-1])
-        dy_last_row = self.resized_gs[-1, :-1] - self.resized_gs[-2, :-1]
-        gradient_matrix[-1, :-1] = np.sqrt(np.pad(dx_last_row, (0, 1), 'edge')**2 + dy_last_row**2)
-
-        # Handle the bottom-right corner
-        gradient_matrix[-1, -1] = np.sqrt((self.resized_gs[-1, -2] - self.resized_gs[-1, -1])**2 +
-                                          (self.resized_gs[-2, -1] - self.resized_gs[-1, -1])**2)
-
-        return gradient_matrix.squeeze()
+        return gradient_magnitude
 
     def calc_M(self):
         """Calculates the matrix M discussed in lecture (with forward-looking cost)
@@ -173,8 +156,32 @@ class SeamImage:
     def seams_removal_vertical(self, num_remove):
         pass
 
-    def rotate_mats(self, clockwise):
-        pass
+    def rotate_mats(self, clockwise=True):
+        if clockwise:
+            self.gs = np.rot90(self.gs, -1)
+            self.rgb = np.rot90(self.rgb, -1)
+            self.resized_gs = np.rot90(self.resized_gs, -1)
+            self.resized_rgb = np.rot90(self.resized_rgb, -1)
+            self.cumm_mask = np.rot90(self.cumm_mask, -1)
+            self.seams_rgb = np.rot90(self.seams_rgb, -1)
+            self.idx_map_h = np.rot90(self.idx_map_h, -1)
+            self.idx_map_v = np.rot90(self.idx_map_v, 1)
+            self.E = np.rot90(self.E, -1)
+        else:
+            self.gs = np.rot90(self.gs, 1)
+            self.rgb = np.rot90(self.rgb, 1)
+            self.resized_gs = np.rot90(self.resized_gs, 1)
+            self.resized_rgb = np.rot90(self.resized_rgb, 1)
+            self.cumm_mask = np.rot90(self.cumm_mask, 1)
+            self.seams_rgb = np.rot90(self.seams_rgb, 1)
+            self.idx_map_h = np.rot90(self.idx_map_h, 1)
+            self.idx_map_v = np.rot90(self.idx_map_v, -1)
+            self.E = np.rot90(self.E, 1)
+
+        self.h, self.w = self.w, self.h
+        self.idx_map_h, self.idx_map_v = self.idx_map_v, self.idx_map_h
+        self.E = self.calc_gradient_magnitude()
+        self.M = self.calc_M()
 
     def init_mats(self):
         self.E = self.calc_gradient_magnitude()
@@ -184,11 +191,25 @@ class SeamImage:
 
     def update_ref_mat(self):
         """
-        update the index map after removing a seam
+        Update the index map after removing a seam.
+        For vertical seam removal, update the horizontal index map (self.idx_map_h).
+        For horizontal seam removal, update the vertical index map (self.idx_map_v).
+
+        Parameters:
+        - is_vertical (bool): Flag indicating the orientation of the seam removal.
         """
-        for i, col in enumerate(self.seam_history[-1]):
-            # Update the reference matrix for the removed seam
-            self.idx_map_h[i, col:] = np.roll(self.idx_map_h[i, col:], -1)
+        seam = self.seam_history[-1]
+
+        if not self.is_horizontal:
+            # Update for vertical seam removal
+            for i, col in enumerate(seam):
+                self.idx_map_h[i, col:] = np.roll(self.idx_map_h[i, col:], -1)
+                # Since we're removing vertical seams, no need to update self.idx_map_v here
+        else:
+            # Update for horizontal seam removal
+            for i, row in enumerate(seam):
+                self.idx_map_v[row, i:] = np.roll(self.idx_map_v[row, i:], -1)
+                # Since we're removing horizontal seams, no need to update self.idx_map_h here
 
     def backtrack_seam(self):
         pass
@@ -284,7 +305,6 @@ class VerticalSeamImage(SeamImage):
             # For the RGB image, remove the seam pixel from each color channel
             new_image_rgb[i, :, :] = np.concatenate((self.resized_rgb[i, :j, :], self.resized_rgb[i, j + 1:, :]),
                                                     axis=0)
-
         # Update the images after seam removal
         self.resized_gs = new_image_gs
         self.resized_rgb = new_image_rgb
@@ -297,6 +317,8 @@ class VerticalSeamImage(SeamImage):
                 self.cumm_mask[self.idx_map_v[i,s_i], self.idx_map_h[i,s_i]] = False
         cumm_mask_rgb = np.stack([self.cumm_mask] * 3, axis=2)
         self.seams_rgb = np.where(cumm_mask_rgb, self.seams_rgb, [1,0,0])
+
+        self.seam_history = []
 
     def init_mats(self):
         self.E = self.calc_gradient_magnitude()
@@ -311,8 +333,10 @@ class VerticalSeamImage(SeamImage):
         Parameters:
             num_remove (int): number of horizontal seam to be removed
         """
+        self.is_horizontal = True
         self.rotate_mats(clockwise=True)
         self.seams_removal(num_remove)
+        self.paint_seams()
         self.rotate_mats(clockwise=False)
 
     # @NI_decor
@@ -322,6 +346,7 @@ class VerticalSeamImage(SeamImage):
         Parameters:
             num_remove (int): umber of vertical seam to be removed
         """
+        self.is_horizontal = False
         self.seams_removal(num_remove)
         self.paint_seams()
 
