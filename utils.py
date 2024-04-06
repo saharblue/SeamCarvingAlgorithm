@@ -492,20 +492,43 @@ def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
     Returns
         the new shape
     """
-    raise NotImplementedError("TODO: Implement scale_to_shape")
+    # Extract original height and width
+    orig_height, orig_width = orig_shape
+    # Extract scale factors for height and width
+    scale_y, scale_x = scale_factors
+    # Calculate new height and width
+    new_height = int(orig_height * scale_y)
+    new_width = int(orig_width * scale_x)
+    # Return new shape as a tuple
+    print(f"new height : {new_height} new width:{new_width}")
+    return new_height, new_width
 
 
-def resize_seam_carving(seam_img: SeamImage, shapes: np.ndarray):
-    """ Resizes an image using Seam Carving algorithm
+def resize_seam_carving(seam_img: SeamImage, shapes: tuple):
+    """Resizes an image using Seam Carving algorithm.
 
     Parameters:
-        seam_img (SeamImage) The SeamImage instance to resize
-        shapes (np.ndarray): desired shape (y,x)
+        seam_img (SeamImage): The SeamImage instance to resize.
+        shapes (tuple): Tuple of original shape and desired shape (y, x).
 
-    Returns
-        the resized rgb image
+    Returns:
+        The resized RGB image.
     """
-    raise NotImplementedError("TODO: Implement resize_seam_carving")
+    orig_shape, new_shape = shapes
+    # Calculate the number of seams to remove
+    vertical_seams_to_remove = orig_shape[1] - new_shape[1]
+    horizontal_seams_to_remove = orig_shape[0] - new_shape[0]
+
+    # Remove vertical seams
+    if vertical_seams_to_remove > 0:
+        seam_img.seams_removal_vertical(vertical_seams_to_remove)
+
+    # Remove horizontal seams
+    if horizontal_seams_to_remove > 0:
+        seam_img.seams_removal_horizontal(horizontal_seams_to_remove)
+
+    return seam_img.resized_rgb
+
 
 
 def bilinear(image, new_shape):
