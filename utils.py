@@ -433,10 +433,12 @@ class SCWithObjRemoval(VerticalSeamImage):
                 - for every active mask we need make it binary: {0,1}
         """
         print('Active masks:', self.active_masks)
-        for mask_name in self.active_masks:
+        self.obj_masks = {mask_name : mask for mask_name, mask in self.obj_masks.items() if mask_name in self.active_masks}
+        for mask_name in self.obj_masks:
             mask = self.obj_masks[mask_name]
             binary_mask = np.where(mask > 0, 1, 0)
             self.obj_masks[mask_name] = binary_mask
+
 
         print(len(self.obj_masks))
         print(self.obj_masks)
@@ -449,15 +451,18 @@ class SCWithObjRemoval(VerticalSeamImage):
                 - you need to apply the masks on other matrices!
                 - think how to force seams to pass through a mask's object..
         """
-        raise NotImplementedError("TODO: Implement SeamImage.apply_mask")
+        print(self.obj_masks.keys())
+        for mask_name in self.active_masks:
+            mask = self.obj_masks[mask_name]
+            self.E = np.where(mask == 1, -np.inf, self.E)
 
 
-    def init_mats(self):
-        self.E = self.calc_gradient_magnitude()
-        self.M = self.calc_M()
-        self.apply_mask() # -> added
-        self.backtrack_mat = np.zeros_like(self.M, dtype=int)
-        self.mask = np.ones_like(self.M, dtype=bool)
+    # def init_mats(self):
+    #     self.E = self.calc_gradient_magnitude()
+    #     self.M = self.calc_M()
+    #     self.apply_mask() # -> added
+    #     self.backtrack_mat = np.zeros_like(self.M, dtype=int)
+    #     self.mask = np.ones_like(self.M, dtype=bool)
 
     def reinit(self, active_masks):
         """ re-initiates instance
@@ -468,8 +473,8 @@ class SCWithObjRemoval(VerticalSeamImage):
         """ A wrapper for super.remove_seam method. takes care of the masks.
         """
         super().remove_seam()
-        for k in self.active_masks:
-            self.obj_masks[k] = self.obj_masks[k][self.mask].reshape(self.h, self.w)
+        # for k in self.active_masks:
+        #     self.obj_masks[k] = self.obj_masks[k][self.mask].reshape(self.h, self.w)
 
 
 def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
