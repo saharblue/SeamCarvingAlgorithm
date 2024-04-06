@@ -430,8 +430,7 @@ class SCWithObjRemoval(VerticalSeamImage):
                 - for every active mask we need make it binary: {0,1}
         """
         print('Active masks:', self.active_masks)
-        self.obj_masks = {mask_name : mask for mask_name, mask in self.obj_masks.items() if mask_name in self.active_masks}
-        for mask_name in self.obj_masks:
+        for mask_name in self.active_masks:
             mask = self.obj_masks[mask_name]
             binary_mask = np.where(mask > 0, 1, 0)
             self.obj_masks[mask_name] = binary_mask
@@ -448,7 +447,7 @@ class SCWithObjRemoval(VerticalSeamImage):
             print(self.obj_masks[mask_name].shape)
 
             mask = self.obj_masks[mask_name]
-            self.E = np.where(mask == 1, 0, self.E + 1000)
+            self.E = np.where(mask == 1, 0, self.E + 100)
 
     def init_mats(self):
         self.E = self.calc_gradient_magnitude()
