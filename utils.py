@@ -455,6 +455,7 @@ class SCWithObjRemoval(VerticalSeamImage):
         for mask_name in self.active_masks:
             mask = self.obj_masks[mask_name]
             self.E = np.where(mask == 1, -np.inf, self.E)
+        self.M = self.calc_M()
 
 
     # def init_mats(self):
