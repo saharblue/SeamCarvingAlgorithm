@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 from PIL import Image
 from numba import jit
@@ -514,6 +516,7 @@ def resize_seam_carving(seam_img: SeamImage, shapes: tuple):
     Returns:
         The resized RGB image.
     """
+    seam_img_copy = copy.deepcopy(seam_img)
     orig_shape, new_shape = shapes
     # Calculate the number of seams to remove
     vertical_seams_to_remove = orig_shape[1] - new_shape[1]
@@ -521,13 +524,13 @@ def resize_seam_carving(seam_img: SeamImage, shapes: tuple):
 
     # Remove vertical seams
     if vertical_seams_to_remove > 0:
-        seam_img.seams_removal_vertical(vertical_seams_to_remove)
+        seam_img_copy.seams_removal_vertical(vertical_seams_to_remove)
 
     # Remove horizontal seams
     if horizontal_seams_to_remove > 0:
-        seam_img.seams_removal_horizontal(horizontal_seams_to_remove)
+        seam_img_copy.seams_removal_horizontal(horizontal_seams_to_remove)
 
-    return seam_img.resized_rgb
+    return seam_img_copy.resized_rgb
 
 
 
