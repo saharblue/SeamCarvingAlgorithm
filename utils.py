@@ -270,7 +270,6 @@ class VerticalSeamImage(SeamImage):
                 self.cumm_mask[row_index, col_index] = False
 
             self.update_ref_mat()
-            print(seam)
             self.remove_seam()
 
     def remove_seam(self):
@@ -433,8 +432,14 @@ class SCWithObjRemoval(VerticalSeamImage):
             Guidelines & hints:
                 - for every active mask we need make it binary: {0,1}
         """
-        raise NotImplementedError("TODO: Implement SeamImage.preprocess_masks")
         print('Active masks:', self.active_masks)
+        for mask_name in self.active_masks:
+            mask = self.obj_masks[mask_name]
+            binary_mask = np.where(mask > 0, 1, 0)
+            self.obj_masks[mask_name] = binary_mask
+
+        print(len(self.obj_masks))
+        print(self.obj_masks)
 
     # @NI_decor
     def apply_mask(self):
