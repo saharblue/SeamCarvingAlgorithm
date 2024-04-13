@@ -110,42 +110,34 @@ class SeamImage:
             As taught, the energy is calculated from top to bottom.
             You might find the function 'np.roll' useful.
         """
-        # Initialize M with zeros and backtrack with -5
         M = np.zeros_like(self.E)
         self.backtrack_mat = np.full_like(self.E, -5, dtype=np.int32)
 
-        # The first row of M is the same as the first row of the energy matrix E
         M[0, :] = self.E[0, :]
 
-        # Precompute the shifted versions of the energy matrix E
-        resized_gs_2d = self.resized_gs
-        gs_shifted_right = np.roll(resized_gs_2d, 1, axis=1)
-        gs_shifted_left = np.roll(resized_gs_2d, -1, axis=1)
-        gs_shifted_down = np.roll(resized_gs_2d, 1, axis=0)
+        resized_gs_copy = self.resized_gs
+        shift_right = np.roll(resized_gs_copy, 1, axis=1)
+        shift_left = np.roll(resized_gs_copy, -1, axis=1)
+        shift_down = np.roll(resized_gs_copy, 1, axis=0)
 
-        # Compute the forward energy costs for the entire image
-        c_left = np.abs(gs_shifted_right - gs_shifted_left) + np.abs(gs_shifted_down - gs_shifted_right)
-        c_right = np.abs(gs_shifted_right - gs_shifted_left) + np.abs(gs_shifted_down - gs_shifted_left)
-        c_up = np.abs(gs_shifted_right - gs_shifted_left)
+        cost_left_forward = np.abs(shift_right - shift_left) + np.abs(shift_down - shift_right)
+        cost_right_forward = np.abs(shift_right - shift_left) + np.abs(shift_down - shift_left)
+        cost_up_forward = np.abs(shift_right - shift_left)
 
-        # Set the infinite costs for the first and last columns
-        c_left[:, 0] = np.inf
-        c_right[:, -1] = np.inf
+        # padding edges with inf
+        cost_left_forward[:, 0] = np.inf
+        cost_right_forward[:, -1] = np.inf
 
-        # Iterate over each row, starting from the second row
         for i in range(1, self.h):
-            # Calculate the total costs for each direction
-            cost_up = M[i - 1, :] + c_up[i, :]
-            cost_left = np.roll(M[i - 1, :], 1) + c_left[i, :]
-            cost_right = np.roll(M[i - 1, :], -1) + c_right[i, :]
+            cost_up = M[i - 1, :] + cost_up_forward[i, :]
+            cost_left = np.roll(M[i - 1, :], 1) + cost_left_forward[i, :]
+            cost_right = np.roll(M[i - 1, :], -1) + cost_right_forward[i, :]
 
-            # Find the minimum forward energy path from the previous row
-            total_costs = np.vstack((cost_left, cost_up, cost_right))
-            min_costs_indices = np.argmin(total_costs, axis=0)
-            M[i, :] = self.E[i, :] + np.choose(min_costs_indices, total_costs)
+            costs = np.vstack((cost_left, cost_up, cost_right))
+            min_cost_idx = np.argmin(costs, axis=0)
+            M[i, :] = self.E[i, :] + np.choose(min_cost_idx, costs)
 
-            # Update the backtracking matrix with the direction of the minimum energy path
-            self.backtrack_mat[i, :] = min_costs_indices - 1  # -1 for left, 0 for up, 1 for right
+            self.backtrack_mat[i, :] = min_cost_idx - 1
 
         return M
 
@@ -431,7 +423,6 @@ class SCWithObjRemoval(VerticalSeamImage):
             Guidelines & hints:
                 - for every active mask we need make it binary: {0,1}
         """
-        print('Active masks:', self.active_masks)
         for mask_name in self.active_masks:
             mask = self.obj_masks[mask_name]
             binary_mask = np.where(mask > 0, 1, 0)
@@ -446,8 +437,6 @@ class SCWithObjRemoval(VerticalSeamImage):
                 - think how to force seams to pass through a mask's object..
         """
         for mask_name in self.active_masks:
-            print(self.obj_masks[mask_name].shape)
-
             mask = self.obj_masks[mask_name]
             self.E = np.where(mask == 1, 0, self.E + 100)
 
@@ -470,8 +459,6 @@ class SCWithObjRemoval(VerticalSeamImage):
         seam = self.seam_history[-1]  # Retrieve the last seam to be removed
 
         for mask_name in self.active_masks:
-            print(self.obj_masks[mask_name].shape)
-
             mask = self.obj_masks[mask_name]
             new_mask = np.zeros((self.h, self.w), dtype=mask.dtype)  # Initialize a new mask with the updated width
 
@@ -481,8 +468,6 @@ class SCWithObjRemoval(VerticalSeamImage):
                 new_mask[i, :] = np.concatenate((mask[i, :j], mask[i, j + 1:]), axis=0)
 
             self.obj_masks[mask_name] = new_mask  # Update the mask in the dictionary
-            print(self.obj_masks[mask_name].shape)
-
 
 def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
     """ Converts scale into shape
@@ -502,7 +487,6 @@ def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
     new_height = int(orig_height * scale_y)
     new_width = int(orig_width * scale_x)
     # Return new shape as a tuple
-    print(f"new height : {new_height} new width:{new_width}")
     return new_height, new_width
 
 
